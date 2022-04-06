@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>{{title}}</title>
+
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='/js/bootstrap.bundle.min.js')}}"></script>
+
+    <!--https://www.dropzone.dev/js/-->
+    <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" type="text/css" />
+
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.min.js"></script>
+
+</head>
+
+<body>
+
+    <h1 style="color: blue">Message in a flask</h1>
+
+	<div class="container-fluid">
+		<div class="row">
+			<div class="col">	
+				{{data}}
+			</div>
+		</div>
+		
+
+		<form  action="" method="POST">
+		<div class="row">
+			<div class="col">	
+				<div class="input-group mb-3">
+				  <div class="input-group-prepend">
+				  <input type="text" class="form-control username" placeholder="Username">
+				  </div>
+
+				  <input type="text" class="form-control message" placeholder="Message">  
+				  <div class="input-group-append">
+					<button class="btn btn-outline-primary" type="submit" id="button-addon2">Send</button>
+				  </div>
+				</div>	
+			</div>
+		</div>		
+		
+		</form>							
+		<div class="row">
+			<ul class="list-group" id="message_holder"></div>		
+		</div>
+	</div>	
+    <script type="text/javascript" charset="utf-8">
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        socket.on('connect', function() {
+            socket.emit('data_event', {
+                data: 'user connected'
+            })
+        });
+
+
+        socket.on('response', function(msg) {
+            console.log(msg)
+            if (typeof msg.user_name !== 'undefined') {
+                $('#message_holder').append(`
+                <li class="list-group-item">
+                	<span class="border border-primary rounded p-1">${msg.user_name}</span> ${msg.message}
+                </li>`)
+            }
+        })
+
+        var form = $('form').on('submit', function(e) {
+            e.preventDefault()
+            let user_name = $('input.username').val()
+            let user_input = $('input.message').val()
+            socket.emit('data_event', {
+                user_name: user_name,
+                message: user_input
+            })
+            $('input.message').val('').focus()
+        })
+    </script>
+</body>
+
+</html>

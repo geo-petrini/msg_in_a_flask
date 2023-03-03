@@ -4,6 +4,6 @@ flask-sqlalchemy
 pymysql
 werkzeug
 simple-websocket
-eventlet
+gevent
 gevent-websocket
 gunicorn

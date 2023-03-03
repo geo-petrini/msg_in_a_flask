@@ -5,4 +5,5 @@ pymysql
 werkzeug
 simple-websocket
 eventlet
-Gunicorn
+gevent-websocket
+gunicorn

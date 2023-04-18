@@ -2,7 +2,7 @@ flask
 flask_socketio
 flask-sqlalchemy
 pymysql
-psycopg2
+psycopg2-binary
 werkzeug
 simple-websocket
 gevent

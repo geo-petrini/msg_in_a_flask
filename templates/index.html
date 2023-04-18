@@ -21,8 +21,17 @@
 </head>
 
 <body>
-
-    <h1 style="color: blue">Message in a flask</h1>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-fluid">
+            <!-- <a class="navbar-brand" href="#">Message in a flask</a> -->
+            <!-- <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+              <span class="navbar-toggler-icon"></span>
+            </button> -->
+            <img src="{{ url_for('static', filename='logo.png') }}" width="50" height="50"/>
+            <div id="clients-count" class="badge rounded-pill bg-info text-dark"></div>
+        </div>
+    </nav>
+    <!-- <h1 style="color: blue">Message in a flask</h1> -->
 
 	<div class="container-fluid">
 		<div class="row">
@@ -31,7 +40,7 @@
 			</div>
 		</div>
 		
-
+        <!-- messages form -->
 		<form  action="" method="POST">
 		<div class="row">
 			<div class="col">	
@@ -47,10 +56,15 @@
 				</div>	
 			</div>
 		</div>		
-		
 		</form>							
+
+        <!-- alert section -->
+        <div class="alert alert-danger collapse" role="alert" id="alert-holder">
+        </div>
+
+        <!-- messages container -->
 		<div class="row">
-			<ul class="list-group" id="message_holder"></div>		
+			<ul class="list-group" id="message-holder"></div>		
 		</div>
 	</div>	
     <script type="text/javascript" charset="utf-8">
@@ -64,12 +78,12 @@
 
 
         socket.on('response', function(msg) {
-            console.log(msg)
+            //console.log(msg)
             if (typeof msg.user_name !== 'undefined') {
                 let message_id = "msg-"+msg.id
                 //todo filter messages by id
                 if($("#" + message_id).length == 0) {
-                    $('#message_holder').append(`
+                    $('#message-holder').append(`
                     <li class="list-group-item" id="${message_id}">
                         <span class="border border-primary rounded p-1">${msg.user_name}</span> ${msg.message}
                     </li>`)
@@ -86,6 +100,30 @@
                 message: user_input
             })
             $('input.message').val('').focus()
+        })
+
+        socket.on('server_status', function(msg){
+            // for (var key in msg) { 
+            //     console.log(key, msg[key])
+            // }            
+            if ( (msg.db_connection instanceof Boolean && msg.db_connection != true) || (msg.db_connection instanceof String && msg.db_connection.includes("error")) ){
+                //var bsCollapse = new bootstrap.Collapse(document.getElementById('alert-holder'), {  show: true })
+                $('#alert-holder').text(msg.db_connection)
+                $('#alert-holder').addClass('show')
+                $('#alert-holder').removeClass('collapse')
+            } else {
+                //var bsCollapse = new bootstrap.Collapse(document.getElementById('alert-holder'), {  hide: true })                
+                $('#alert-holder').addClass('collapse')
+                $('#alert-holder').removeClass('show')
+                $('#alert-holder').text("")
+            }       
+            
+            if ( msg.client_count instanceof Number || (msg.client_count instanceof String && !msg.client_count.includes("error"))){
+                $('#clients-count').text(msg.client_count)
+            } else {
+                //console.log( msg.client_count )
+                $('#clients-count').text(msg.client_count)
+            }
         })
     </script>
 </body>

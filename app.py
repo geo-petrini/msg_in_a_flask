@@ -3,10 +3,15 @@ import sys
 import logging
 import shutil
 import datetime
+import time
+from threading import Thread
 from flask import Flask, flash, request, redirect, url_for, send_from_directory
 from flask import render_template
+from flask import current_app
 from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.sql import text #imported only for db.session.execute( text('select 1') )
+
 
 status = None
 
@@ -29,11 +34,9 @@ clients = []
 def home():
     return redirect(url_for('index'))
 
-
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
-
 
 @app.route('/index')
 def index():
@@ -42,8 +45,7 @@ def index():
     except:
         logging.exception('error creating db')
     content = ''
-    return render_template("index.html", data=content, title='Mypage - index')
-
+    return render_template("index.html", data=content, title='Message In A Flask')
 
 @app.route('/create')
 def create():
@@ -62,7 +64,12 @@ def ping():
 def get_status():
     if (status != None):
         logging.debug("Send status now")
-        emit("response_status")
+        io.emit("response_status")
+
+@io.on('connect')
+def connect():
+    logging.info('client connected')
+    _start_background_thread()
 
 @io.on('disconnect')
 def disconnect():
@@ -81,9 +88,8 @@ def handle_data_event(data, methods=['GET', 'POST']):
 
         #send the last 10 messages
         try:
-            messages = db.session.query(Message).order_by(Message.id.desc()).limit(10)
-            messages=messages[::-1] #re-reverse
-            sendMessagesToClient(messages, sid)
+            messages = load_last_messages()
+            send_to(messages, sid)
         except Exception as e:
             logging.exception(f'error loading records on user connected')
     
@@ -94,26 +100,86 @@ def handle_data_event(data, methods=['GET', 'POST']):
             db.session.commit()
             data['id'] = id
             #io.emit('response', data, callback=messageReceived)
-            sendMessageToEveryone(message)
+            send_to(message)
         except Exception as e:
             logging.exception(f'error saving record from data {data}')
         
+def load_last_messages():
+    messages = db.session.query(Message).order_by(Message.id.desc()).limit(10)
+    messages=messages[::-1] #re-reverse    
+    return messages
 
-def sendMessagesToClient(messages, client):
+'''
+send a single Message or a list of Message to one or more clients
+default "all" clients
+'''
+def send_to(messages, clients='all'):
+    if isinstance(messages, Message):
+        messages = [messages]
     for message in messages:
         data = {'user_name':message.user, 'message':message.message, 'id':message.id}
-        logging.debug(f'message to emit: {message} as {data} to {client}')
-        io.emit('response', data, callback=messageReceived, room=client)
+        logging.debug(f'message to emit: {message} as {data} to {clients}')
+        if clients == 'all':
+            io.emit('response', data, callback=messageReceived)    
+        else:
+            if isinstance(clients, str):
+                io.emit('response', data, callback=messageReceived, room=clients)
 
-def sendMessageToEveryone(message):
-    data = {'user_name':message.user, 'message':message.message, 'id':message.id}
-    logging.debug(f'message to emit: {message} as {data}')
-    io.emit('response', data, callback=messageReceived)    
+            if isinstance(clients, list):
+                for client in clients:
+                    io.emit('response', data, callback=messageReceived, room=client)
 
 
 def messageReceived(methods=['GET', 'POST']):
     print('message was received!!!')
 
+def _start_background_thread():
+    global thread
+    if thread is None:
+        thread = FlaskThread(target=_status_check)
+        #thread = threading.Thread(target=_status_check)
+        thread.daemon = True
+        thread.start()
+        logging.debug(f'thread status: {thread.is_alive} thread (new): {thread}')
+    else:
+        logging.debug(f'thread status: {thread.is_alive} thread: {thread}')
+
+def _status_check():
+    while True:
+        data = {'db_connection': _get_connection_status(), 'client_count': _get_client_count()}
+        if not isinstance( data['db_connection'], bool) or not isinstance( data['client_count'], int): 
+            logging.error(f'emitting {data}')
+        io.emit('server_status', data)
+        time.sleep(5)
+
+def _get_connection_status():
+    error_connection_status = 'error with database connection'
+    try:
+        db.session.execute( text('select 1') )
+        connection_status = True
+    except Exception as e:
+        logging.exception(error_connection_status)
+        connection_status = error_connection_status
+    return connection_status
+
+def _get_client_count():
+    error_client_count = 'error listing connected clients'
+    try:
+        client_count = len(clients)
+    except Exception as e:
+        logging.exception(error_client_count)
+        client_count = error_client_count
+    return client_count
+
+class FlaskThread(Thread):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.app = current_app._get_current_object()
+        #logging.getLogger(__name__).debug(f'thread started')
+
+    def run(self):
+        with self.app.app_context():
+            super().run()
 
 class Message(db.Model):
     __tablenane__ = 'messages'
@@ -130,5 +196,6 @@ class Message(db.Model):
 
 if __name__ == "__main__":
     #app.run("0.0.0.0", debug = True)
+    thread = None
     io.run(app, debug=True, host='0.0.0.0')
 

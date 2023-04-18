@@ -22,8 +22,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_CONN_STR')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 db = SQLAlchemy(app)
 
-socketio = SocketIO(app)
-
+io = SocketIO(app)
+clients = []
 
 @app.route('/')
 def home():
@@ -58,24 +58,58 @@ def create():
 def ping():
     return 'Pong'
 
-@socketio.on('get_status')
+@io.on('get_status')
 def get_status():
     if (status != None):
         logging.debug("Send status now")
         emit("response_status")
 
-@socketio.on('data_event')
-def handle_data_event(json, methods=['GET', 'POST']):
-    print('received data_event: ' + str(json))
-    
-    if('user_name' in json and 'message' in json):
+@io.on('disconnect')
+def disconnect():
+    sid = request.sid
+    logging.info(f'disconnected {sid}')
+    clients.remove(sid)
+
+@io.on('data_event')
+def handle_data_event(data, methods=['GET', 'POST']):
+    print('received data_event: ' + str(data))
+
+    if('data' in data and data['data']=='user connected'):
+        #save new client
+        sid = request.sid
+        clients.append(sid)
+
+        #send the last 10 messages
         try:
-            record = Message(json['user_name'], json['message'])
-            db.session.add(record)
-            db.session.commit()
+            messages = db.session.query(Message).order_by(Message.id.desc()).limit(10)
+            messages=messages[::-1] #re-reverse
+            sendMessagesToClient(messages, sid)
         except Exception as e:
-            logging.exception(f'error saving record from data {json}')
-    socketio.emit('response', json, callback=messageReceived)
+            logging.exception(f'error loading records on user connected')
+    
+    if('user_name' in data and 'message' in data):
+        try:
+            message = Message(data['user_name'], data['message'])
+            id = db.session.add(message)
+            db.session.commit()
+            data['id'] = id
+            #io.emit('response', data, callback=messageReceived)
+            sendMessageToEveryone(message)
+        except Exception as e:
+            logging.exception(f'error saving record from data {data}')
+        
+
+def sendMessagesToClient(messages, client):
+    for message in messages:
+        data = {'user_name':message.user, 'message':message.message, 'id':message.id}
+        logging.debug(f'message to emit: {message} as {data} to {client}')
+        io.emit('response', data, callback=messageReceived, room=client)
+
+def sendMessageToEveryone(message):
+    data = {'user_name':message.user, 'message':message.message, 'id':message.id}
+    logging.debug(f'message to emit: {message} as {data}')
+    io.emit('response', data, callback=messageReceived)    
+
 
 def messageReceived(methods=['GET', 'POST']):
     print('message was received!!!')
@@ -96,5 +130,5 @@ class Message(db.Model):
 
 if __name__ == "__main__":
     #app.run("0.0.0.0", debug = True)
-    socketio.run(app, debug=True, host='0.0.0.0')
+    io.run(app, debug=True, host='0.0.0.0')
 

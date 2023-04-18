@@ -66,10 +66,14 @@
         socket.on('response', function(msg) {
             console.log(msg)
             if (typeof msg.user_name !== 'undefined') {
-                $('#message_holder').append(`
-                <li class="list-group-item">
-                	<span class="border border-primary rounded p-1">${msg.user_name}</span> ${msg.message}
-                </li>`)
+                let message_id = "msg-"+msg.id
+                //todo filter messages by id
+                if($("#" + message_id).length == 0) {
+                    $('#message_holder').append(`
+                    <li class="list-group-item" id="${message_id}">
+                        <span class="border border-primary rounded p-1">${msg.user_name}</span> ${msg.message}
+                    </li>`)
+                }
             }
         })
 

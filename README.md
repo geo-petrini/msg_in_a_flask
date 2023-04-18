@@ -29,20 +29,26 @@ FLUSH PRIVILEGES;
 exit
 
 #for cmd
+
 set DB_CONN_STR=mysql+pymysql://msg_user:msg_pass@localhost/msg_in_a_flask
 
 #for ps
+
 $env:DB_CONN_STR='mysql+pymysql://msg_user:msg_pass@localhost/msg_in_a_flask'
 
 #for bash
+
 export DB_CONN_STR=mysql+pymysql://msg_user:msg_pass@localhost/msg_in_a_flask
 
 #run the application
+
 python3 app.py
 
 
 #dump db for backup
+
 mysqldump -u msg_user --password=msg_pass msg_in_a_flask > `date +"%Y%m%d_%H%M%S"`_msg_in_a_flask.dump
 
 #restore db from backup
+
 mysql msg_in_a_flask < [timestamp]_msg_in_a_flask.dump

@@ -56,3 +56,4 @@ mysql msg_in_a_flask < [timestamp]_msg_in_a_flask.dump
 
 TODO
 - add a test protocol to generate messages, maybe using Message in a Bottle lyrics
+- add file upload https://www.dropzone.dev/bootstrap.html

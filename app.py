@@ -86,9 +86,9 @@ def handle_data_event(data, methods=['GET', 'POST']):
         sid = request.sid
         clients.append(sid)
 
-        #send the last 10 messages
+        #send the last messages
         try:
-            messages = load_last_messages()
+            messages = load_last_messages(50)
             send_to(messages, sid)
         except Exception as e:
             logging.exception(f'error loading records on user connected')
@@ -104,8 +104,8 @@ def handle_data_event(data, methods=['GET', 'POST']):
         except Exception as e:
             logging.exception(f'error saving record from data {data}')
         
-def load_last_messages():
-    messages = db.session.query(Message).order_by(Message.id.desc()).limit(10)
+def load_last_messages(quantity=10):
+    messages = db.session.query(Message).order_by(Message.id.desc()).limit(quantity)
     messages=messages[::-1] #re-reverse    
     return messages
 

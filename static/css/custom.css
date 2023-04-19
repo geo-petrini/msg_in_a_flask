@@ -1,0 +1,60 @@
+.filldiv-h
+{
+    height: 100vh;
+}
+
+.filldiv-w
+{
+    height: 100vw;
+}
+
+.filldiv-h-75
+{
+    height: 75vh;
+}
+
+.filldiv-w-75
+{
+    height: 75vw;
+}
+
+.filldiv-h-50
+{
+    height: 50vh;
+}
+
+.filldiv-w-50
+{
+    height: 50vw;
+}
+
+.filldiv-h-25
+{
+    height: 25vh;
+}
+
+.filldiv-w-25
+{
+    height: 25vw;
+}
+
+#messages-row{
+    position: absolute;
+    top: 120px;
+    bottom: 100px;
+    left:0;
+    overflow-y: scroll;
+    width: 100%;
+}
+
+.scrollbutton {
+    position: fixed;
+    bottom: 60px;
+    right: 30px;
+    z-index: 9000;
+    opacity: 0;
+}
+
+.showBtn {
+    opacity: 0.5;
+}

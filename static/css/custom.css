@@ -50,7 +50,7 @@
 .scrollbutton {
     position: fixed;
     bottom: 60px;
-    right: 30px;
+    right: 24px;
     z-index: 9000;
     opacity: 0;
 }

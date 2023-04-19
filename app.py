@@ -30,6 +30,8 @@ db = SQLAlchemy(app)
 io = SocketIO(app)
 clients = []
 
+thread = None
+
 @app.route('/')
 def home():
     return redirect(url_for('index'))

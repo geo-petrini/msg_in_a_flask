@@ -89,12 +89,17 @@ $(document).ready(
 )
 
 function setupDropzone() {
+    var previewNode = document.querySelector("#template");
+    previewNode.id = "";
+    var previewTemplate = previewNode.parentNode.innerHTML;
+    previewNode.parentNode.removeChild(previewNode);
 
     dz = new Dropzone(document.body, {
         url: "/",
         // maxFilesize: 1024 * 1024 * 10,
         // thumbnailWidth: 48,
         // thumbnailHeight: 48,
+        previewTemplate: previewTemplate,
         previewsContainer: "#previews", // Define the container to display the previews
         autoQueue: false, // Make sure the files aren't queued until manually added
         clickable: "#clickable" // Define the element that should be used as click trigger to select files.
@@ -127,14 +132,15 @@ function getPreviewsModal() {
 }
 
 
-$("#previews-modal-close").click(previewsClose)
-$("#previews-modal-close").click(previewsUpload)
-function previewsClose() {
+$("#previews-modal-close").click(previewsCloseAll)
+$("#previews-modal-close").click(previewsUploadAll)
+
+function previewsCloseAll() {
     dz.removeAllFiles(true);
     getPreviewsModal().hide()
 }
 
-function previewsUpload() {
+function previewsUploadAll() {
     //TODO upload files in dz
     getPreviewsModal().hide()
 }

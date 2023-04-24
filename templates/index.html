@@ -70,12 +70,60 @@
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-body">
-                    <div id="previews" class="dropzone-previews"></div>
+                    <div id="previews" class="dropzone-previews row row-cols-1 row-cols-md-2 g-4">
+
+                        <div id="template"><!-- This is used as the file preview template -->
+                            <div class="col">   <!-- https://getbootstrap.com/docs/5.0/components/card/#grid-cards -->
+                                <div class="card">
+                                    <div class="card mb-4" >
+                                        <div class="row g-0">
+                                            <div class="col-md-4">
+                                                <span class="preview"><img data-dz-thumbnail /></span>
+                                            </div>
+                                            <div class="col-md-8">
+                                                <div class="card-body">
+                                                    <!-- <h5 class="card-title"><span data-dz-name></span></h5> -->
+                                                <!-- <h6 class="card-subtitle mb-2 text-muted size" data-dz-size></h6> -->
+                                                <p class="card-text">
+                                                    <span data-dz-name></span>
+                                                    <br>
+                                                    <span data-dz-size></span>
+                                                </p>
+                                                <div class="progress progress-striped active" role="progressbar"
+                                                aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                                <div class="progress-bar progress-bar-success" style="width:0%;"
+                                                data-dz-uploadprogress></div>
+                                            </div>
+                                            <div>
+                                                <strong class="error text-danger" data-dz-errormessage></strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer text-end">
+                                        <!-- <button data-dz-remove class="btn btn-warning cancel">
+                                            <i class="glyphicon glyphicon-ban-circle"></i>
+                                            <span>Cancel</span>
+                                        </button> -->
+                                        <button data-dz-remove class="btn btn-danger delete">
+                                            <i class="glyphicon glyphicon-trash"></i>
+                                            <span>Remove</span>
+                                        </button>
+                                        <button class="btn btn-primary start">
+                                            <i class="glyphicon glyphicon-upload"></i>
+                                            <span>Upload</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <!-- <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button> -->
-                    <button id="previews-modal-close" type="button" class="btn btn-danger">Cancel</button>
-                    <button id="previews-modal-upload" type="button" class="btn btn-primary">Upload</button>
+                    <button id="previews-modal-close" type="button" class="btn btn-danger">Cancel All</button>
+                    <button id="previews-modal-upload" type="button" class="btn btn-primary">Upload All</button>
                 </div>
             </div>
         </div>
@@ -100,7 +148,7 @@
                             </div>
                             <div class="input-group-append">
                                 <button id="clickable" class="btn btn-outline-secondary">&#128279;</button>
-                            </div>                            
+                            </div>
                         </div>
                     </form>
                 </div>

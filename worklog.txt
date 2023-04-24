@@ -1,0 +1,5 @@
+25.04.2023
+added flask_migrate https://flask-migrate.readthedocs.io/en/latest/#example
+> pip install flask_migrate
+> flask db migrate
+> flask db upgrade

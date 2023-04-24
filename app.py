@@ -4,12 +4,16 @@ import logging
 import shutil
 import datetime
 import time
+import uuid
+import base64
 from threading import Thread
 from flask import Flask, flash, request, redirect, url_for, send_from_directory
 from flask import render_template
 from flask import current_app
+from flask import send_file
 from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from sqlalchemy.sql import text #imported only for db.session.execute( text('select 1') )
 
 
@@ -26,11 +30,14 @@ app.config['SECRET_KEY'] = 'chiave segreta ma non molto'    #usata da alcuni mod
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_CONN_STR')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 io = SocketIO(app)
 clients = []
 
 thread = None
+UPLOAD_FOLDER = './uploads'
+ALLOWED_EXTENSIONS = set(['xlsx', 'txt', 'sh'])
 
 @app.route('/')
 def home():
@@ -53,6 +60,7 @@ def index():
 def create():
     try:
         db.create_all()
+        logging.info('creating db')
         return 'db created'
     except:
         logging.exception('error creating db')
@@ -61,6 +69,59 @@ def create():
 @app.route('/ping')
 def ping():
     return 'Pong'
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    #TODO generate UUID for stored filename
+    logging.debug('upload')
+    if request.method == 'POST':
+        try:
+            if 'file' not in request.files:
+                return 'No file selected'
+            file = request.files['file']
+            if file.filename == '':
+                return "No file selected"
+
+            logging.debug(f'file: {file}')
+            upload_file = uuid.uuid4().hex
+            upload_path = os.path.join(UPLOAD_FOLDER, upload_file)
+            file.save(upload_path)
+            if os.path.exists(upload_path):
+                status = f'file uploaded as {upload_path}'
+                logging.debug(status)
+
+                attachment = Attachment(file.filename, upload_file, None)
+                db.session.add(attachment)
+                db.session.commit()
+            else:
+                status = 'file not found'
+                logging.warning(status)
+            '''
+            if file and allowed_file(file.filename):
+                #file.save(secure_filename("file.xlsx"))  # saves in current directory
+                file.save("file.xlsx")  # saves in current directory
+                logging.debug(f'saving file {file.filename}')
+                status = "File uploaded"
+            else:
+                logging.warning(f'invalid file {file.filename}')
+            '''
+            return upload_file
+        except Exception as e:
+            logging.exception(f'error saving file {file.filename}')
+            return 'ERROR'
+
+    return f'WRONG METHOD {request.method}'
+    # return redirect(url_for('index'))
+
+@app.route('/download/<file_id>', methods=['GET'])
+def download(file_id):
+    upload_path = os.path.join(UPLOAD_FOLDER, file_id)
+    if os.path.exists(upload_path):
+        #return send_file(upload_path)
+        with open(upload_path, "rb") as image_file:
+            b64_string = base64.b64encode(image_file.read())
+            return b64_string
+
 
 @io.on('get_status')
 def get_status():
@@ -98,14 +159,33 @@ def handle_data_event(data, methods=['GET', 'POST']):
     if('user_name' in data and 'message' in data):
         try:
             message = Message(data['user_name'], data['message'])
-            id = db.session.add(message)
+            db.session.add(message)
             db.session.commit()
-            data['id'] = id
-            #io.emit('response', data, callback=messageReceived)
+
             send_to(message)
         except Exception as e:
             logging.exception(f'error saving record from data {data}')
         
+    if('user_name' in data and 'upload_notification' in data):
+        try:
+            logging.debug(f'handling upload_notification {data}')
+            stored_filename = data["upload_notification"]
+            #message_content = f'<a class="btn" onclick="download(${stored_filename})">'
+            message = Message(data['user_name'], message=None)           
+            db.session.add(message)
+            db.session.commit()
+
+            attachment = Attachment.query.filter_by(stored_filename = stored_filename).first()
+            attachment.message_id = message.id
+            db.session.commit()
+            logging.debug(f'assign message_id {message.id} to attachment {attachment}')
+            logging.debug(f'message {message.attachments}')
+
+            send_to(message)
+        except Exception as e:
+            logging.exception(f'error saving record from data {data}')        
+
+
 def load_last_messages(quantity=10):
     messages = db.session.query(Message).order_by(Message.id.desc()).limit(quantity)
     messages=messages[::-1] #re-reverse    
@@ -120,6 +200,12 @@ def send_to(messages, clients='all'):
         messages = [messages]
     for message in messages:
         data = {'user_name':message.user, 'message':message.message, 'id':message.id}
+        if message.attachments:
+            for attachment in message.attachments:
+                if 'attachments' not in data:
+                    data['attachments'] = []
+                data['attachments'].append(attachment.stored_filename)
+            
         logging.debug(f'message to emit: {message} as {data} to {clients}')
         if clients == 'all':
             io.emit('response', data, callback=messageReceived)    
@@ -188,6 +274,8 @@ class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user = db.Column(db.String(255))
     message = db.Column(db.String(255))
+    #attachments = db.relationship("Attachment", back_populates="message")
+    attachments = db.relationship("Attachment", backref="message")
     ts = db.Column(db.DateTime)
     
     def __init__(self, user, message):
@@ -195,6 +283,20 @@ class Message(db.Model):
         self.message = message
         self.ts = datetime.datetime.now()
     
+class Attachment(db.Model):
+    __tablenane__ = 'attachment'
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255))
+    stored_filename = db.Column(db.String(255))
+    ts = db.Column(db.DateTime)
+    message_id = db.Column(db.Integer, db.ForeignKey('message.id'), nullable=True)
+    #message = db.relationship("Message", back_populates="attachment")
+    
+    def __init__(self, filename, stored_filename, message_id=None):
+        self.filename = filename
+        self.stored_filename = stored_filename
+        self.message_id = message_id
+        self.ts = datetime.datetime.now()
 
 if __name__ == "__main__":
     #app.run("0.0.0.0", debug = True)

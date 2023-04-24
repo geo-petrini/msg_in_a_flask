@@ -22,13 +22,41 @@ function scrollToLast() {
 
 function displayMessage(msg) {
     let message_id = "msg-" + msg.id
-    //todo filter messages by id
+    //TODO filter messages by id
     if ($("#" + message_id).length == 0) {
+        let content = ''
+        if (msg.attachments) {
+            console.log(`message ${msg.id} has attachments ${msg.attachments}`)
+            content = `
+            <span id="${msg.attachments}" class="btn" onclick="downloadAttachment('${msg.attachments}');">&#128279;&darr;</span>
+            <span><img  style='max-width:200px;max-height:200px' id="img-${msg.attachments}" src="" /></span>
+            `
+            //style='display:block;max-width:200px;max-height:200px'
+            //class="img-thumbnail"
+        }
+
+        if (msg.message) {
+            content = msg.message
+        }
         $('#message-holder').append(`
                     <li class="list-group-item" id="${message_id}">
-                        <span class="border border-primary rounded p-1">${msg.user_name}</span> ${msg.message}
+                        <span class="border border-primary rounded p-1">${msg.user_name}</span> ${content}
                     </li>`)
     }
+}
+
+function downloadAttachment(id) {
+    console.log(`downloading attachment ${id}`)
+
+    $.ajax({
+        url: `/download/${id}`,
+        context: document.body
+    }).done(function (response) {
+        
+        $(`#${id}`).remove();
+        $(`#img-${id}`).attr("src", `data:image/jpeg;base64, ${response}`);
+    });
+
 }
 
 var form = $('form').on('submit', function (e) {
@@ -75,10 +103,19 @@ function updateClientsCount(data) {
 }
 
 //https://socket.io/how-to/upload-a-file
-function upload(files) {
-    socket.emit("upload", files[0], (status) => {
-        console.log(status);
-    });
+// function upload(file){
+//     socket.emit("upload-notification", file, (status) => {
+//         console.log(status);
+//     });
+// }
+
+function notifyUpload(file) {
+    let user_name = $('input.username').val()
+    console.log(`notifying uploaded file ${file} by ${user_name}`)
+    socket.emit('data_event', {
+        user_name: user_name,
+        upload_notification: file
+    })
 }
 
 //https://github.com/dropzone/dropzone/wiki/make-the-whole-body-a-dropzone
@@ -93,9 +130,9 @@ function setupDropzone() {
     previewNode.id = "";
     var previewTemplate = previewNode.parentNode.innerHTML;
     previewNode.parentNode.removeChild(previewNode);
-
+    //imperative setup https://docs.dropzone.dev/getting-started/setup/imperative
     dz = new Dropzone(document.body, {
-        url: "/",
+        url: "/upload",
         // maxFilesize: 1024 * 1024 * 10,
         // thumbnailWidth: 48,
         // thumbnailHeight: 48,
@@ -105,15 +142,10 @@ function setupDropzone() {
         clickable: "#clickable" // Define the element that should be used as click trigger to select files.
     });
 
-    dz.on("addedfile", file => {
-        console.log("A file has been added");
-        togglePreviews()
-    });
-
-    dz.on("removed", file => {
-        console.log("A file has been removed");
-        togglePreviews()
-    });
+    dz.on("addedfile", file => addFile(file));
+    dz.on("removedFile", file => removeFile(file));
+    dz.on("success", (file, responseText, e) => completeSuccessFile(file, responseText, e));
+    dz.on("error", (file, responseText, xhr) => completeErrorFile(file, responseText, xhr));
 }
 
 function togglePreviews() {
@@ -121,6 +153,7 @@ function togglePreviews() {
     if (count > 0) {
         getPreviewsModal().show()
     } else {
+        console.log('empty preview > closing')
         getPreviewsModal().hide()
     }
 }
@@ -132,17 +165,50 @@ function getPreviewsModal() {
 }
 
 
+$("#previews-modal-upload").click(previewsUploadAll)
 $("#previews-modal-close").click(previewsCloseAll)
-$("#previews-modal-close").click(previewsUploadAll)
+
+function addFile(file) {
+    console.log(`file "${file.name}" has added`);
+    file.previewElement.querySelector(".start-file-upload").onclick = function () { uploadFile(file) };
+    togglePreviews()
+}
+
+function uploadFile(file) {
+    dz.enqueueFile(file);
+    file.previewElement.querySelector(".start-file-upload")
+}
+
+async function completeSuccessFile(file, responseText, e) {
+    console.log(`file "${file.name}" completed successfully with message ${responseText} and e ${e}`);
+    await sleep(750)
+    file.previewElement.parentNode.removeChild(file.previewElement);
+    notifyUpload(responseText)
+}
+
+async function completeErrorFile(file, responseText, xhr) {
+    //TODO test error
+    console.log(`file "${file.name}" completed with an error ${responseText} ${xhr}`);
+    await sleep(1500)
+    //file.previewElement.parentNode.removeChild(file.previewElement);
+}
+
+function removeFile(file) {
+    //TODO chekc why this is not called
+    console.log(`file "${file.name}" has removed`);
+    togglePreviews()
+}
 
 function previewsCloseAll() {
     dz.removeAllFiles(true);
     getPreviewsModal().hide()
 }
 
-function previewsUploadAll() {
-    //TODO upload files in dz
-    getPreviewsModal().hide()
+async function previewsUploadAll() {
+    console.log('uploading all files')
+    dz.enqueueFiles(dz.getFilesWithStatus(Dropzone.ADDED))
+    await sleep(750)
+    togglePreviews()
 }
 
 function scrollButtonCallback(entries, observer) {
@@ -162,6 +228,10 @@ function scrollButtonCallback(entries, observer) {
             });
         }
     });
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 $("#scroll-down-button").click(scrollToLast)

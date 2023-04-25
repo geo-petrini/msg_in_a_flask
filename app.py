@@ -6,6 +6,7 @@ import datetime
 import time
 import uuid
 import base64
+import random
 from threading import Thread
 from flask import Flask, flash, request, redirect, url_for, send_from_directory
 from flask import render_template
@@ -34,9 +35,12 @@ migrate = Migrate(app, db)
 
 io = SocketIO(app)
 clients = []
+selected_song = None
 
-thread = None
+status_thread = None
+singer_thread = None
 UPLOAD_FOLDER = './uploads'
+SONGS_FOLDER = './songs'
 ALLOWED_EXTENSIONS = set(['xlsx', 'txt', 'sh'])
 
 @app.route('/')
@@ -132,7 +136,7 @@ def get_status():
 @io.on('connect')
 def connect():
     logging.info('client connected')
-    _start_background_thread()
+    _start_background_status_thread()
 
 @io.on('disconnect')
 def disconnect():
@@ -163,6 +167,9 @@ def handle_data_event(data, methods=['GET', 'POST']):
             db.session.commit()
 
             send_to(message)
+            
+            if data['message'] == '//sing':
+                sing()
         except Exception as e:
             logging.exception(f'error saving record from data {data}')
         
@@ -220,17 +227,82 @@ def send_to(messages, clients='all'):
 
 def messageReceived(methods=['GET', 'POST']):
     print('message was received!!!')
-
-def _start_background_thread():
-    global thread
-    if thread is None:
-        thread = FlaskThread(target=_status_check)
-        #thread = threading.Thread(target=_status_check)
-        thread.daemon = True
-        thread.start()
-        logging.debug(f'thread status: {thread.is_alive} thread (new): {thread}')
+    
+def sing():
+    global selected_song
+    #select new song
+    entries = os.listdir(SONGS_FOLDER)
+    songs = []
+    for entry in entries:
+        if entry.endswith('.txt'):
+            songs.append(entry)
+        
+    selected_song = random.choice(songs)
+    _start_background_singer_thread()
+    pass
+    
+def _start_background_singer_thread():
+    global singer_thread
+    if singer_thread is None:
+        singer_thread = FlaskThread(target=_sing)
+        singer_thread.daemon = True
+        singer_thread.start()
+        logging.debug(f'singer_thread status: {singer_thread.is_alive} thread (new): {singer_thread}')
     else:
-        logging.debug(f'thread status: {thread.is_alive} thread: {thread}')
+        logging.debug(f'singer_thread status: {singer_thread.is_alive} thread: {singer_thread}')
+              
+
+def _start_background_status_thread():
+    global status_thread
+    if status_thread is None:
+        status_thread = FlaskThread(target=_status_check)
+        #thread = threading.Thread(target=_status_check)
+        status_thread.daemon = True
+        status_thread.start()
+        logging.debug(f'thread status: {status_thread.is_alive} thread (new): {status_thread}')
+    else:
+        logging.debug(f'thread status: {status_thread.is_alive} thread: {status_thread}')
+
+def _sing():
+    global selected_song
+    lines = None
+    last_line = 0
+    band = None
+    try:
+        if selected_song:
+            fh = open(os.path.join(SONGS_FOLDER, selected_song))
+            lines = fh.readlines()
+            last_line = 0
+    except Exception as e:
+        logging.exception(f'error reading song "{selected_song}"')
+    while True:
+        
+        if lines and last_line < len(lines):
+            line = lines[last_line]
+            #logging.debug(f'singing line {line}')
+            if len(line) > 0:
+                if last_line == 0:
+                    band = line
+                    last_line += 1
+                    continue
+                    
+                last_line += 1
+                #create new Message
+                message = Message(band, line)
+                db.session.add(message)
+                db.session.commit()
+
+                send_to(message)                
+        else:
+            logging.info(f'reached the end of song {selected_song}')
+            lines = None
+            selected_song = None
+            break
+            
+        time.sleep(1)
+                
+            
+        
 
 def _status_check():
     while True:

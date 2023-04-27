@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import logging.handlers
 import shutil
 import datetime
 import time
@@ -18,30 +19,38 @@ from flask_migrate import Migrate
 from sqlalchemy.sql import text #imported only for db.session.execute( text('select 1') )
 
 
+clients = []
 status = None
+selected_song = None
+status_thread = None
+singer_thread = None
+
+LOGS_FOLDER = './logs'
+UPLOAD_FOLDER = './uploads'
+SONGS_FOLDER = './songs'
+
+SONG_DELAY = 0.5    #seconds
+CHECK_DELAY = 5     #seconds
+ALLOWED_EXTENSIONS = set(['xlsx', 'txt', 'sh']) #NOT USED SHOULD BE CHANGED TO IMAGES
+
 
 #logging.basicConfig(datefmt='%Y-%m-%d %H:%M:%S', filename='app.log', format='[%(asctime)s][%(levelname)s] %(message)s', level=logging.DEBUG)
-
-logging.basicConfig(datefmt='%Y-%m-%d %H:%M:%S', format='[%(asctime)s][%(levelname)s] %(message)s', level=logging.DEBUG, stream=sys.stdout)
+#logging.basicConfig(datefmt='%Y-%m-%d %H:%M:%S', format='[%(asctime)s][%(levelname)s] %(message)s', level=logging.DEBUG, stream=sys.stdout)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'chiave segreta ma non molto'    #usata da alcuni moduli quindi la creo anche se per ora non serve
 
 #app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:root@db/voices'
+if not os.getenv('DB_CONN_STR'):
+    logging.error(f'env variable DB_CONN_STR not set')
+    exit(1)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_CONN_STR')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-
 io = SocketIO(app)
-clients = []
-selected_song = None
 
-status_thread = None
-singer_thread = None
-UPLOAD_FOLDER = './uploads'
-SONGS_FOLDER = './songs'
-ALLOWED_EXTENSIONS = set(['xlsx', 'txt', 'sh'])
 
 @app.route('/')
 def home():
@@ -77,7 +86,7 @@ def ping():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     #TODO generate UUID for stored filename
-    logging.debug('upload')
+    logging.debug(f'upload {request}')
     if request.method == 'POST':
         try:
             if 'file' not in request.files:
@@ -247,9 +256,9 @@ def _start_background_singer_thread():
         singer_thread = FlaskThread(target=_sing)
         singer_thread.daemon = True
         singer_thread.start()
-        logging.debug(f'singer_thread status: {singer_thread.is_alive} thread (new): {singer_thread}')
+        logging.debug(f'singer_thread status: {singer_thread.is_alive()} thread (new): {singer_thread} with song {selected_song}')
     else:
-        logging.debug(f'singer_thread status: {singer_thread.is_alive} thread: {singer_thread}')
+        logging.debug(f'singer_thread status: {singer_thread.is_alive()} thread: {singer_thread} with song {selected_song}')
               
 
 def _start_background_status_thread():
@@ -259,50 +268,54 @@ def _start_background_status_thread():
         #thread = threading.Thread(target=_status_check)
         status_thread.daemon = True
         status_thread.start()
-        logging.debug(f'thread status: {status_thread.is_alive} thread (new): {status_thread}')
+        logging.debug(f'thread status: {status_thread.is_alive()} thread (new): {status_thread}')
     else:
-        logging.debug(f'thread status: {status_thread.is_alive} thread: {status_thread}')
+        logging.debug(f'thread status: {status_thread.is_alive()} thread: {status_thread}')
 
 def _sing():
     global selected_song
     lines = None
     last_line = 0
     band = None
-    try:
-        if selected_song:
-            fh = open(os.path.join(SONGS_FOLDER, selected_song))
-            lines = fh.readlines()
-            last_line = 0
-    except Exception as e:
-        logging.exception(f'error reading song "{selected_song}"')
+    song_in_progress = False
     while True:
-        
-        if lines and last_line < len(lines):
-            line = lines[last_line]
-            #logging.debug(f'singing line {line}')
-            if len(line) > 0:
-                if last_line == 0:
-                    band = line
-                    last_line += 1
-                    continue
-                    
-                last_line += 1
-                #create new Message
-                message = Message(band, line)
-                db.session.add(message)
-                db.session.commit()
+        try:
+            if selected_song and not song_in_progress:
+                logging.debug(f'loading song lines for {selected_song}')
+                fh = open(os.path.join(SONGS_FOLDER, selected_song))
+                lines = fh.readlines()
+                last_line = 0
+        except Exception as e:
+            logging.exception(f'error reading song "{selected_song}"')
 
-                send_to(message)                
-        else:
-            logging.info(f'reached the end of song {selected_song}')
-            lines = None
-            selected_song = None
-            break
+        if selected_song:
+            if lines and last_line < len(lines):
+                try:
+                    song_in_progress = True
+                    line = lines[last_line].strip()
+                    #logging.debug(f'singing line {line}')
+                    if len(line) > 0:
+                        if last_line == 0:
+                            band = line
+                            last_line += 1
+                            logging.info(f'starting song {selected_song}')
+                            continue
+                                                  
+                        #create new Message
+                        message = Message(band, line)
+                        db.session.add(message)
+                        db.session.commit()
+                        send_to(message)  
+                    last_line += 1
+                except Exception as e:
+                    logging.exception(f'error singing line {last_line}')
+            else:
+                logging.info(f'reached the end of song {selected_song}')
+                lines = None
+                selected_song = None
+                song_in_progress = False
             
-        time.sleep(1)
-                
-            
-        
+        time.sleep(SONG_DELAY)
 
 def _status_check():
     while True:
@@ -310,7 +323,7 @@ def _status_check():
         if not isinstance( data['db_connection'], bool) or not isinstance( data['client_count'], int): 
             logging.error(f'emitting {data}')
         io.emit('server_status', data)
-        time.sleep(5)
+        time.sleep(CHECK_DELAY)
 
 def _get_connection_status():
     error_connection_status = 'error with database connection'
@@ -369,6 +382,35 @@ class Attachment(db.Model):
         self.stored_filename = stored_filename
         self.message_id = message_id
         self.ts = datetime.datetime.now()
+
+def get_configured_logger(name=None):
+    logger = logging.getLogger(name)
+    if (len(logger.handlers) == 0):
+        # This logger has no handlers, so we can assume it hasn't yet been configured
+        # Create RotatingFileHandler
+        formatter = "%(asctime)s | %(levelname)s | %(process)s | %(thread)s | %(filename)s | %(funcName)s():%(lineno)d | %(message)s"
+        handler = logging.handlers.RotatingFileHandler(os.path.join(LOGS_FOLDER,'app.log'), maxBytes = 1024*1024*10, backupCount = 6)
+        handler.setFormatter(logging.Formatter(formatter))
+        handler.setLevel(logging.INFO)
+        
+        handler_d = logging.handlers.RotatingFileHandler(os.path.join(LOGS_FOLDER,'app_debug.log'), maxBytes = 1024*1024*10, backupCount = 2)
+        handler_d.setFormatter(logging.Formatter(formatter))
+        handler_d.setLevel(logging.DEBUG)
+
+        handler_c = logging.StreamHandler()
+        handler_c.setFormatter(logging.Formatter(formatter))
+        handler_c.setLevel(logging.DEBUG)          
+
+        logger.addHandler(handler)
+        logger.addHandler(handler_d)
+        logger.addHandler(handler_c)
+        logger.setLevel(logging.DEBUG)
+    else:
+        logging.info(f'logger {logger} already has {len(logger.handlers)}')
+
+    return logger
+
+get_configured_logger()
 
 if __name__ == "__main__":
     #app.run("0.0.0.0", debug = True)

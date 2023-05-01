@@ -53,7 +53,3 @@ mysqldump -u msg_user --password=msg_pass msg_in_a_flask > `date +"%Y%m%d_%H%M%S
 
 mysql msg_in_a_flask < [timestamp]_msg_in_a_flask.dump
 
-
-TODO
-- add a test protocol to generate messages, maybe using Message in a Bottle lyrics
-- add file upload https://www.dropzone.dev/bootstrap.html

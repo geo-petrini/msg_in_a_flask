@@ -29,6 +29,8 @@ LOGS_FOLDER = './logs'
 UPLOAD_FOLDER = './uploads'
 SONGS_FOLDER = './songs'
 
+COMMAND_SING = '//sing'
+
 SONG_DELAY = 0.5    #seconds
 CHECK_DELAY = 5     #seconds
 ALLOWED_EXTENSIONS = set(['xlsx', 'txt', 'sh']) #NOT USED SHOULD BE CHANGED TO IMAGES
@@ -177,7 +179,7 @@ def handle_data_event(data, methods=['GET', 'POST']):
 
             send_to(message)
             
-            if data['message'] == '//sing':
+            if data['message'] == COMMAND_SING:
                 sing()
         except Exception as e:
             logging.exception(f'error saving record from data {data}')

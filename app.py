@@ -17,7 +17,8 @@ from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.sql import text #imported only for db.session.execute( text('select 1') )
-
+from dotenv import load_dotenv
+load_dotenv()
 
 clients = []
 status = None
@@ -40,7 +41,7 @@ ALLOWED_EXTENSIONS = set(['xlsx', 'txt', 'sh']) #NOT USED SHOULD BE CHANGED TO I
 #logging.basicConfig(datefmt='%Y-%m-%d %H:%M:%S', format='[%(asctime)s][%(levelname)s] %(message)s', level=logging.DEBUG, stream=sys.stdout)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chiave segreta ma non molto'    #usata da alcuni moduli quindi la creo anche se per ora non serve
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'chiave segreta ma non molto')    #usata da alcuni moduli quindi la creo anche se per ora non serve
 
 #app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:root@db/voices'
 if not os.getenv('DB_CONN_STR'):

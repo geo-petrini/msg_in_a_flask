@@ -23,3 +23,8 @@ htmlcov/
 .coverage
 .coverage.*
 *,cover
+/logs/app_debug.log*
+/logs/app.log*
+/instance/*
+/migrations/__pycache__/
+__pycache__/

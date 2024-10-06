@@ -1,7 +1,8 @@
 # msg_in_a_flask
 
 ## Info
-Small flask chat demo using `gunicorn` and `flask_socketio`.
+Small flask chat demo using `gunicorn` and `flask_socketio`. It's purpose is to give students a basic example on how to use web sockets with flask.
+
 In addition to simple chat with users the site "sings". If someone sends the `//sing` string the application will broadcast song lyrics.
 
 
@@ -78,6 +79,9 @@ mysql msg_in_a_flask < [timestamp]_msg_in_a_flask.dump
 ```
 
 
-## Future additions
+## TODO Future additions
 - Load songs from a website with lyrics such as https://www.lyrics.com
 - Use an LLM for generating new songs based on user prompts
+- Split app.py into multiple modules
+- Proper testing
+- Proper documentation
